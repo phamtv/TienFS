@@ -1,0 +1,59 @@
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [],
+        "Topics": [
+          {
+            "Name": "loan-events",
+            "Properties": {
+              "DefaultMessageTimeToLive": "P14D",
+              "DuplicateDetectionHistoryTimeWindow": "PT10M",
+              "RequiresDuplicateDetection": false
+            },
+            "Subscriptions": [
+              {
+                "Name": "funding-loan-approved",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "LockDuration": "PT30S",
+                  "MaxDeliveryCount": 5,
+                  "DeadLetteringOnMessageExpiration": true
+                },
+                "Rules": [
+                  {
+                    "Name": "OnlyLoanApproved",
+                    "Properties": {
+                      "FilterType": "Correlation",
+                      "CorrelationFilter": { "Subject": "LoanApproved" }
+                    }
+                  }
+                ]
+              },
+              {
+                "Name": "servicing-loan-funded",
+                "Properties": {
+                  "DefaultMessageTimeToLive": "P14D",
+                  "LockDuration": "PT30S",
+                  "MaxDeliveryCount": 5,
+                  "DeadLetteringOnMessageExpiration": true
+                },
+                "Rules": [
+                  {
+                    "Name": "OnlyLoanFunded",
+                    "Properties": {
+                      "FilterType": "Correlation",
+                      "CorrelationFilter": { "Subject": "LoanFunded" }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "Logging": { "Type": "File" }
+  }
+}

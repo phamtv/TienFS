@@ -1,0 +1,147 @@
+# =====================================================================================
+# TIENFS — CI/CD PIPELINE
+# -------------------------------------------------------------------------------------
+# Builds, tests, and deploys the three microservices (Origination, Funding, Servicing)
+# to their respective Azure App Services. Assumes:
+#   - infra/main.bicep has already been deployed once by hand (App Services, Key Vault,
+#     Service Bus namespace already exist — this pipeline deploys CODE, not infra).
+#   - An Azure Resource Manager service connection named below exists in this
+#     Azure DevOps project (Project Settings > Service connections).
+#   - App Service names match the ones Bicep created: <baseName>-origination,
+#     <baseName>-funding, <baseName>-servicing.
+# =====================================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  # ---- EDIT THESE THREE TO MATCH YOUR ENVIRONMENT ----
+  azureServiceConnection: 'tienfs-azure-connection'   # name of the ARM service connection you created
+  resourceGroupName: 'tienfs-rg'                       # resource group the Bicep template deployed into
+  appBaseName: 'tienfs'                                 # must match baseName param in infra/main.bicep
+
+stages:
+  # -----------------------------------------------------------------------------------
+  # STAGE 1 — Build, test, and publish deployable artifacts for all three services
+  # -----------------------------------------------------------------------------------
+  - stage: Build
+    displayName: 'Build and test'
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Restore, build, test, publish'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET 8 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '8.0.x'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'dotnet restore'
+            inputs:
+              command: 'restore'
+              projects: 'LoanPlatform.sln'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'dotnet build'
+            inputs:
+              command: 'build'
+              projects: 'LoanPlatform.sln'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
+
+          # If/when a test project is added (see the demo-project plan), this step
+          # will pick it up automatically via the **/*Tests.csproj pattern — until
+          # then it's a no-op rather than a failure.
+          - task: DotNetCoreCLI@2
+            displayName: 'dotnet test'
+            inputs:
+              command: 'test'
+              projects: '**/*Tests.csproj'
+              arguments: '--configuration $(buildConfiguration) --no-build'
+            continueOnError: true
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish Origination'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: 'src/LoanOrigination.Api/LoanOrigination.Api.csproj'
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/origination'
+              zipAfterPublish: true
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish Funding'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: 'src/LoanFunding.Api/LoanFunding.Api.csproj'
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/funding'
+              zipAfterPublish: true
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish Servicing'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: 'src/LoanServicing.Api/LoanServicing.Api.csproj'
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/servicing'
+              zipAfterPublish: true
+
+          - publish: '$(Build.ArtifactStagingDirectory)'
+            artifact: 'drop'
+
+  # -----------------------------------------------------------------------------------
+  # STAGE 2 — Deploy each published zip to its App Service
+  # -----------------------------------------------------------------------------------
+  - stage: Deploy
+    displayName: 'Deploy to Azure'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployOrigination
+        displayName: 'Deploy Origination'
+        environment: 'tienfs-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    appType: 'webApp'
+                    appName: '$(appBaseName)-origination'
+                    package: '$(Pipeline.Workspace)/drop/origination/*.zip'
+
+      - deployment: DeployFunding
+        displayName: 'Deploy Funding'
+        environment: 'tienfs-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    appType: 'webApp'
+                    appName: '$(appBaseName)-funding'
+                    package: '$(Pipeline.Workspace)/drop/funding/*.zip'
+
+      - deployment: DeployServicing
+        displayName: 'Deploy Servicing'
+        environment: 'tienfs-production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    appType: 'webApp'
+                    appName: '$(appBaseName)-servicing'
+                    package: '$(Pipeline.Workspace)/drop/servicing/*.zip'

@@ -1,0 +1,40 @@
+# =====================================================================================
+# LOCAL SERVICE BUS EMULATOR
+# -------------------------------------------------------------------------------------
+# Runs Microsoft's official Azure Service Bus emulator locally via Docker, so the
+# full origination -> funding -> servicing event flow can be tested end-to-end
+# without a real Azure subscription. Requires Docker Desktop (or compatible).
+#
+# Usage: docker compose up -d   (from this /emulator directory)
+# The emulator listens on localhost:5672 (AMQP) — matches the connection strings
+# in each service's appsettings.Development.json (UseDevelopmentEmulator=true).
+# =====================================================================================
+version: "3.8"
+services:
+  sqledge:
+    container_name: servicebus-emulator-sql
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Sample_Password123!"  # local dev only — never use in production
+    networks:
+      - sb-emulator
+
+  servicebus-emulator:
+    container_name: servicebus-emulator
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    depends_on:
+      - sqledge
+    environment:
+      SQL_SERVER: sqledge
+      MSSQL_SA_PASSWORD: "Sample_Password123!"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5672:5672"
+    volumes:
+      - ./config.json:/ServiceBus_Emulator/ConfigFiles/Config.json
+    networks:
+      - sb-emulator
+
+networks:
+  sb-emulator:
