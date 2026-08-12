@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TienFS · Loan Origination Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ledger-ink: #16233A;
+    --ledger-ink-soft: #2A3A54;
+    --paper: #EDEFEA;
+    --paper-raised: #F7F8F4;
+    --line: #C7CCC0;
+    --line-soft: #DBDED4;
+    --brass: #A6742C;
+    --brass-soft: #EFE1CB;
+    --forest: #2F6F4E;
+    --forest-soft: #DCEAE2;
+    --rust: #96372A;
+    --rust-soft: #F1DCD7;
+    --ink-text: #1C2836;
+    --ink-secondary: #5B6675;
+    --radius: 3px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink-text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--ledger-ink);
+    color: var(--paper);
+    padding: 18px 28px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 20px;
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+
+  header h1 .divider { color: var(--brass); margin: 0 10px; font-weight: 400; }
+  header h1 .subtitle { font-size: 14px; font-weight: 400; opacity: 0.75; }
+
+  .auth-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+
+  .auth-bar input {
+    background: var(--ledger-ink-soft);
+    border: 1px solid #3D4E6B;
+    color: var(--paper);
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    width: 130px;
+  }
+
+  .auth-bar input::placeholder { color: #8291A8; }
+
+  .btn {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    border: none;
+    border-radius: var(--radius);
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-primary { background: var(--brass); color: #fff; }
+  .btn-dark { background: var(--ledger-ink); color: var(--paper); }
+  .btn-approve { background: var(--forest); color: #fff; }
+  .btn-deny { background: var(--rust); color: #fff; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-secondary);
+  }
+
+  .token-status {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--rust); display: inline-block;
+  }
+  .token-status.live { background: var(--forest); }
+
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 24px;
+    padding: 24px 28px 48px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .panel h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 15px;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ledger-ink);
+  }
+
+  .panel .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--brass);
+    letter-spacing: 0.05em;
+    margin-bottom: 14px;
+    display: block;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-secondary);
+    margin-bottom: 4px;
+    margin-top: 14px;
+  }
+
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    background: #fff;
+    color: var(--ink-text);
+  }
+
+  input[type="text"]:focus, input[type="number"]:focus {
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+
+  .field-row { display: flex; gap: 10px; }
+  .field-row > div { flex: 1; }
+
+  .panel .btn { margin-top: 16px; width: 100%; }
+
+  #applicant-error {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--rust);
+    display: none;
+  }
+
+  .pipeline-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+  }
+
+  .pipeline-table th {
+    text-align: left;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-secondary);
+    padding: 0 10px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .pipeline-table td {
+    padding: 11px 10px;
+    border-bottom: 1px solid var(--line-soft);
+    cursor: pointer;
+  }
+
+  .pipeline-table tr:hover td { background: var(--paper); }
+  .pipeline-table tr.selected td { background: var(--brass-soft); }
+
+  .status-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-Submitted { background: var(--line-soft); color: var(--ink-secondary); }
+  .status-UnderReview { background: var(--brass-soft); color: var(--brass); }
+  .status-Approved { background: var(--forest-soft); color: var(--forest); }
+  .status-Denied { background: var(--rust-soft); color: var(--rust); }
+
+  .empty-state {
+    padding: 30px 10px;
+    text-align: center;
+    color: var(--ink-secondary);
+    font-size: 13px;
+  }
+
+  #detail-panel { margin-top: 24px; }
+  #detail-empty { color: var(--ink-secondary); font-size: 13px; }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 14px 0 18px;
+  }
+
+  .detail-fact .label {
+    font-size: 11px;
+    color: var(--ink-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+
+  .detail-fact .value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    color: var(--ink-text);
+  }
+
+  .decision-box {
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+
+  .decision-box.eligible { border-color: var(--forest); background: var(--forest-soft); }
+  .decision-box.ineligible { border-color: var(--rust); background: var(--rust-soft); }
+
+  .finalize-row {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .finalize-row > div { flex: 1; min-width: 120px; }
+  .finalize-row .btn { width: auto; margin-top: 0; }
+
+  /* --- Stamp trail: the signature element --- */
+  .stamp-trail {
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+
+  .stamp-trail .eyebrow { margin-bottom: 18px; }
+
+  .stamps {
+    display: flex;
+    align-items: center;
+  }
+
+  .stamp {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 130px;
+  }
+
+  .stamp-circle {
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    color: var(--line);
+    transition: all 0.3s ease;
+  }
+
+  .stamp-circle.filled {
+    border-color: var(--brass);
+    background: var(--brass);
+    color: #fff;
+  }
+
+  .stamp-circle.confirmed {
+    border-color: var(--forest);
+    background: var(--forest);
+    color: #fff;
+  }
+
+  .stamp-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-secondary);
+    text-align: center;
+  }
+
+  .stamp-detail {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-secondary);
+    text-align: center;
+    min-height: 14px;
+  }
+
+  .stamp-connector {
+    flex: 1;
+    height: 2px;
+    background: var(--line);
+    margin: 0 -4px 24px;
+    transition: background 0.3s ease;
+  }
+
+  .stamp-connector.filled { background: var(--brass); }
+
+  .refresh-note {
+    margin-top: 14px;
+    font-size: 11px;
+    color: var(--ink-secondary);
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TienFS<span class="divider">·</span><span class="subtitle">Loan Origination Console</span></h1>
+  <div class="auth-bar">
+    <span class="token-status" id="token-dot"></span>
+    <input type="text" id="username-input" placeholder="username" value="loan.officer" />
+    <button class="btn btn-dark" id="get-token-btn" style="padding:6px 12px;">Get token</button>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <span class="eyebrow">INTAKE</span>
+    <h2>New Applicant</h2>
+    <label for="applicant-name">Applicant name</label>
+    <input type="text" id="applicant-name" placeholder="e.g. Maria Alvarez" />
+    <label for="requested-amount">Requested amount ($)</label>
+    <input type="number" id="requested-amount" placeholder="e.g. 24000" min="0" step="100" />
+    <button class="btn btn-primary" id="submit-application-btn">Submit application</button>
+    <div id="applicant-error"></div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <span class="eyebrow">PIPELINE</span>
+      <h2>Applications</h2>
+      <table class="pipeline-table" id="pipeline-table">
+        <thead>
+          <tr>
+            <th>Applicant</th>
+            <th>Requested</th>
+            <th>Status</th>
+            <th>Submitted</th>
+          </tr>
+        </thead>
+        <tbody id="pipeline-body"></tbody>
+      </table>
+      <div class="empty-state" id="pipeline-empty">No applications yet — submit one to begin.</div>
+    </div>
+
+    <div class="panel" id="detail-panel" style="display:none;">
+      <span class="eyebrow">DETAIL</span>
+      <h2 id="detail-name">—</h2>
+
+      <div class="detail-grid">
+        <div class="detail-fact">
+          <div class="label">Requested</div>
+          <div class="value" id="detail-requested">—</div>
+        </div>
+        <div class="detail-fact">
+          <div class="label">Status</div>
+          <div class="value" id="detail-status">—</div>
+        </div>
+        <div class="detail-fact">
+          <div class="label">Submitted</div>
+          <div class="value" id="detail-submitted">—</div>
+        </div>
+      </div>
+
+      <button class="btn btn-ghost" id="run-decision-btn">Run automated decision</button>
+
+      <div class="decision-box" id="decision-box" style="display:none;"></div>
+
+      <div class="finalize-row">
+        <div>
+          <label for="finalize-amount">Approved amount ($)</label>
+          <input type="number" id="finalize-amount" min="0" step="100" />
+        </div>
+        <div>
+          <label for="finalize-rate">Interest rate (%)</label>
+          <input type="number" id="finalize-rate" min="0" step="0.01" />
+        </div>
+        <button class="btn btn-approve" id="approve-btn">Approve &amp; publish</button>
+        <button class="btn btn-deny" id="deny-btn">Deny</button>
+      </div>
+
+      <div class="stamp-trail">
+        <span class="eyebrow">EVENT TRAIL</span>
+        <div class="stamps">
+          <div class="stamp">
+            <div class="stamp-circle" id="stamp-origination">1</div>
+            <div class="stamp-label">Origination</div>
+            <div class="stamp-detail" id="stamp-origination-detail"></div>
+          </div>
+          <div class="stamp-connector" id="connector-1"></div>
+          <div class="stamp">
+            <div class="stamp-circle" id="stamp-funding">2</div>
+            <div class="stamp-label">Funding</div>
+            <div class="stamp-detail" id="stamp-funding-detail"></div>
+          </div>
+          <div class="stamp-connector" id="connector-2"></div>
+          <div class="stamp">
+            <div class="stamp-circle" id="stamp-servicing">3</div>
+            <div class="stamp-label">Servicing</div>
+            <div class="stamp-detail" id="stamp-servicing-detail"></div>
+          </div>
+        </div>
+        <div class="refresh-note" id="polling-note"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="detail-empty-panel">
+      <div id="detail-empty">Select an application from the pipeline to view details.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // ---------------------------------------------------------------------------------
+  // Service endpoints — matches the ports set in each service's launchSettings.json.
+  // Change these if you've configured different ports locally.
+  // ---------------------------------------------------------------------------------
+  const ORIGINATION_URL = 'http://localhost:5001';
+  const FUNDING_URL = 'http://localhost:5002';
+  const SERVICING_URL = 'http://localhost:5003';
+
+  let authToken = null;
+  let selectedApplicationId = null;
+  let pollHandle = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function authHeaders() {
+    return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+  }
+
+  async function apiFetch(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+        ...(options.headers || {}),
+      },
+    });
+    return res;
+  }
+
+  // --- Auth -------------------------------------------------------------------------
+  $('get-token-btn').addEventListener('click', async () => {
+    const username = $('username-input').value.trim();
+    if (!username) return;
+    try {
+      const res = await fetch(`${ORIGINATION_URL}/api/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      if (!res.ok) throw new Error(`Token request failed (${res.status})`);
+      const data = await res.json();
+      authToken = data.token;
+      $('token-dot').classList.add('live');
+      await loadPipeline();
+    } catch (err) {
+      $('token-dot').classList.remove('live');
+      alert(`Could not get a token — is Origination running at ${ORIGINATION_URL}?\n\n${err.message}`);
+    }
+  });
+
+  // --- Submit new application ---------------------------------------------------
+  $('submit-application-btn').addEventListener('click', async () => {
+    const nameEl = $('applicant-name');
+    const amountEl = $('requested-amount');
+    const errorEl = $('applicant-error');
+    errorEl.style.display = 'none';
+
+    const applicantName = nameEl.value.trim();
+    const requestedAmount = parseFloat(amountEl.value);
+
+    if (!applicantName || !requestedAmount || requestedAmount <= 0) {
+      errorEl.textContent = 'Enter a name and a requested amount greater than zero.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if (!authToken) {
+      errorEl.textContent = 'Get a token first — see the top right.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`${ORIGINATION_URL}/api/applications`, {
+        method: 'POST',
+        body: JSON.stringify({ applicantName, requestedAmount }),
+      });
+      if (!res.ok) throw new Error(`Submit failed (${res.status})`);
+      nameEl.value = '';
+      amountEl.value = '';
+      await loadPipeline();
+    } catch (err) {
+      errorEl.textContent = `Could not submit — is Origination running at ${ORIGINATION_URL}? (${err.message})`;
+      errorEl.style.display = 'block';
+    }
+  });
+
+  // --- Pipeline table -------------------------------------------------------------
+  async function loadPipeline() {
+    if (!authToken) return;
+    try {
+      const res = await apiFetch(`${ORIGINATION_URL}/api/applications`);
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      const applications = await res.json();
+      renderPipeline(applications);
+    } catch (err) {
+      console.error('Failed to load pipeline', err);
+    }
+  }
+
+  function renderPipeline(applications) {
+    const body = $('pipeline-body');
+    const empty = $('pipeline-empty');
+    body.innerHTML = '';
+
+    if (!applications.length) {
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    applications
+      .slice()
+      .sort((a, b) => new Date(b.submittedAtUtc) - new Date(a.submittedAtUtc))
+      .forEach((app) => {
+        const row = document.createElement('tr');
+        if (app.id === selectedApplicationId) row.classList.add('selected');
+        row.innerHTML = `
+          <td>${escapeHtml(app.applicantName)}</td>
+          <td>$${Number(app.requestedAmount).toLocaleString()}</td>
+          <td><span class="status-chip status-${app.status}">${app.status}</span></td>
+          <td>${new Date(app.submittedAtUtc).toLocaleDateString()}</td>
+        `;
+        row.addEventListener('click', () => selectApplication(app.id));
+        body.appendChild(row);
+      });
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  // --- Detail panel -----------------------------------------------------------------
+  async function selectApplication(id) {
+    selectedApplicationId = id;
+    $('detail-panel').style.display = 'block';
+    $('detail-empty-panel').style.display = 'none';
+    await refreshDetail();
+    await loadPipeline(); // re-render to show selected highlight
+    startPolling();
+  }
+
+  async function refreshDetail() {
+    if (!selectedApplicationId) return;
+    try {
+      const res = await apiFetch(`${ORIGINATION_URL}/api/applications/${selectedApplicationId}`);
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+      const app = await res.json();
+      renderDetail(app);
+      await refreshStampTrail(app);
+    } catch (err) {
+      console.error('Failed to load detail', err);
+    }
+  }
+
+  function renderDetail(app) {
+    $('detail-name').textContent = app.applicantName;
+    $('detail-requested').textContent = `$${Number(app.requestedAmount).toLocaleString()}`;
+    $('detail-status').innerHTML = `<span class="status-chip status-${app.status}">${app.status}</span>`;
+    $('detail-submitted').textContent = new Date(app.submittedAtUtc).toLocaleString();
+
+    const box = $('decision-box');
+    if (app.isEligible === null || app.isEligible === undefined) {
+      box.style.display = 'none';
+    } else {
+      box.style.display = 'block';
+      box.className = 'decision-box ' + (app.isEligible ? 'eligible' : 'ineligible');
+      box.innerHTML = app.isEligible
+        ? `<strong>Eligible.</strong> Suggested: $${Number(app.suggestedAmount).toLocaleString()} at ${app.suggestedRate}% — ${app.decisionReason}`
+        : `<strong>Not eligible for automated approval.</strong> ${app.decisionReason}`;
+    }
+
+    // Pre-fill finalize fields with the suggestion, if any, otherwise the requested amount.
+    $('finalize-amount').value = app.suggestedAmount ?? app.requestedAmount;
+    $('finalize-rate').value = app.suggestedRate ?? '';
+
+    const isFinalized = app.status === 'Approved' || app.status === 'Denied';
+    $('run-decision-btn').disabled = isFinalized;
+    $('approve-btn').disabled = isFinalized;
+    $('deny-btn').disabled = isFinalized;
+  }
+
+  $('run-decision-btn').addEventListener('click', async () => {
+    if (!selectedApplicationId) return;
+    try {
+      const res = await apiFetch(`${ORIGINATION_URL}/api/applications/${selectedApplicationId}/decision`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`Decision failed (${res.status})`);
+      await refreshDetail();
+      await loadPipeline();
+    } catch (err) {
+      alert(`Could not run decision: ${err.message}`);
+    }
+  });
+
+  $('approve-btn').addEventListener('click', async () => {
+    if (!selectedApplicationId) return;
+    const approvedAmount = parseFloat($('finalize-amount').value);
+    const interestRate = parseFloat($('finalize-rate').value);
+    if (!approvedAmount || approvedAmount <= 0 || isNaN(interestRate)) {
+      alert('Enter a valid approved amount and interest rate before finalizing.');
+      return;
+    }
+    try {
+      const res = await apiFetch(`${ORIGINATION_URL}/api/applications/${selectedApplicationId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ approvedAmount, interestRate }),
+      });
+      if (!res.ok) throw new Error(`Approve failed (${res.status})`);
+      await refreshDetail();
+      await loadPipeline();
+    } catch (err) {
+      alert(`Could not finalize: ${err.message}`);
+    }
+  });
+
+  $('deny-btn').addEventListener('click', async () => {
+    if (!selectedApplicationId) return;
+    try {
+      const res = await apiFetch(`${ORIGINATION_URL}/api/applications/${selectedApplicationId}/deny`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`Deny failed (${res.status})`);
+      await refreshDetail();
+      await loadPipeline();
+    } catch (err) {
+      alert(`Could not deny: ${err.message}`);
+    }
+  });
+
+  // --- Stamp trail: shows the event actually cascading through Funding/Servicing ---
+  async function refreshStampTrail(app) {
+    const originationStamp = $('stamp-origination');
+    const originationDetail = $('stamp-origination-detail');
+    const fundingStamp = $('stamp-funding');
+    const fundingDetail = $('stamp-funding-detail');
+    const servicingStamp = $('stamp-servicing');
+    const servicingDetail = $('stamp-servicing-detail');
+    const connector1 = $('connector-1');
+    const connector2 = $('connector-2');
+
+    // Origination stage — filled the moment the application is approved.
+    const originationDone = app.status === 'Approved';
+    originationStamp.className = 'stamp-circle' + (originationDone ? ' confirmed' : '');
+    originationDetail.textContent = originationDone
+      ? new Date(app.decisionAtUtc).toLocaleTimeString()
+      : '';
+    connector1.className = 'stamp-connector' + (originationDone ? ' filled' : '');
+
+    if (!originationDone) {
+      fundingStamp.className = 'stamp-circle';
+      fundingDetail.textContent = '';
+      servicingStamp.className = 'stamp-circle';
+      servicingDetail.textContent = '';
+      connector2.className = 'stamp-connector';
+      $('polling-note').textContent = '';
+      return;
+    }
+
+    // Funding stage — polled independently; LoanFunding.Api reacts to the event
+    // asynchronously, so this may take a moment to appear after approval.
+    try {
+      const res = await apiFetch(`${FUNDING_URL}/api/funding/by-application/${app.id}`);
+      if (res.ok) {
+        const record = await res.json();
+        const disbursed = record.status === 'Disbursed';
+        fundingStamp.className = 'stamp-circle' + (disbursed ? ' confirmed' : ' filled');
+        fundingDetail.textContent = disbursed
+          ? new Date(record.disbursedAtUtc).toLocaleTimeString()
+          : record.status;
+        connector2.className = 'stamp-connector' + (disbursed ? ' filled' : '');
+      } else {
+        fundingStamp.className = 'stamp-circle';
+        fundingDetail.textContent = 'awaiting event…';
+      }
+    } catch {
+      fundingDetail.textContent = `Funding unreachable at ${FUNDING_URL}`;
+    }
+
+    // Servicing stage — same idea, one hop further down the event chain.
+    try {
+      const res = await apiFetch(`${SERVICING_URL}/api/accounts/by-application/${app.id}`);
+      if (res.ok) {
+        const account = await res.json();
+        servicingStamp.className = 'stamp-circle confirmed';
+        servicingDetail.textContent = new Date(account.openedAtUtc).toLocaleTimeString();
+      } else {
+        servicingStamp.className = 'stamp-circle';
+        servicingDetail.textContent = 'awaiting event…';
+      }
+    } catch {
+      servicingDetail.textContent = `Servicing unreachable at ${SERVICING_URL}`;
+    }
+
+    const allDone = fundingStamp.classList.contains('confirmed') && servicingStamp.classList.contains('confirmed');
+    $('polling-note').textContent = allDone
+      ? 'Event chain complete.'
+      : 'Watching for Funding and Servicing to react to the published event…';
+  }
+
+  function startPolling() {
+    if (pollHandle) clearInterval(pollHandle);
+    pollHandle = setInterval(refreshDetail, 2500);
+  }
+
+  // Kick off pipeline load if a token is already present (none on first load).
+  loadPipeline();
+</script>
+
+</body>
+</html>

@@ -3,19 +3,26 @@
 # -------------------------------------------------------------------------------------
 # Runs Microsoft's official Azure Service Bus emulator locally via Docker, so the
 # full origination -> funding -> servicing event flow can be tested end-to-end
-# without a real Azure subscription — plus a real SQL Server instance the three
-# .NET applications use for their own persistent data (same engine as Azure SQL
-# in production, just running locally instead of in the cloud).
+# without a real Azure subscription — plus THREE separate SQL Server instances,
+# one per microservice, matching the "each service owns its own database, on its
+# own server" isolation used in production (see infra/main.bicep).
 #
 # Usage: docker compose up -d   (from this /emulator directory)
-#   - Service Bus emulator listens on localhost:5672 (AMQP)
-#   - SQL Server for app data listens on localhost:14333
-# Both match the connection strings in each service's appsettings.Development.json.
+#   - Service Bus emulator : localhost:5672  (AMQP)
+#   - Origination database : localhost:14331
+#   - Funding database     : localhost:14332
+#   - Servicing database   : localhost:14333
+# All match the connection strings in each service's appsettings.Development.json.
+#
+# Running three separate SQL Server containers (rather than one shared instance) is
+# more resource-hungry than sharing — expect this to use noticeably more memory than
+# earlier versions of this file. If your machine is memory-constrained, this is the
+# trade-off for accurately simulating "no shared failure domain between services."
 # =====================================================================================
 services:
   # ---------------------------------------------------------------------------------
   # Internal plumbing for the Service Bus emulator ONLY — not reachable from the
-  # host, not meant for application data. See sql-local below for that.
+  # host, not meant for application data.
   # ---------------------------------------------------------------------------------
   sqledge:
     container_name: servicebus-emulator-sql
@@ -43,19 +50,38 @@ services:
       - sb-emulator
 
   # ---------------------------------------------------------------------------------
-  # SQL Server for the three applications' own data — separate from sqledge above.
-  # Exposed on the host at localhost:14333 (non-default port, to avoid clashing with
-  # any other local SQL Server instance you might already have on the standard 1433).
-  # Each service creates and owns its own database on this shared server instance
-  # (EF Core's Database.EnsureCreated() creates the database itself on first run —
-  # no manual setup needed).
+  # One SQL Server instance PER SERVICE — true isolation, not just separate
+  # databases on a shared server. Each is fully independent: if one crashes, the
+  # other two services are unaffected.
   # ---------------------------------------------------------------------------------
-  sql-local:
-    container_name: tienfs-sql-local
+  sql-origination:
+    container_name: tienfs-sql-origination
     image: mcr.microsoft.com/azure-sql-edge:latest
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "Sample_Password123!"  # local dev only — never use in production
+    ports:
+      - "14331:1433"
+    networks:
+      - sb-emulator
+
+  sql-funding:
+    container_name: tienfs-sql-funding
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Sample_Password123!"
+    ports:
+      - "14332:1433"
+    networks:
+      - sb-emulator
+
+  sql-servicing:
+    container_name: tienfs-sql-servicing
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Sample_Password123!"
     ports:
       - "14333:1433"
     networks:

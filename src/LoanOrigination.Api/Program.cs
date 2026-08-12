@@ -69,6 +69,19 @@ else
 builder.Services.AddSharedJwtAuth(builder.Configuration);
 
 // -------------------------------------------------------------------------------------
+// CORS — permissive policy so a browser-based UI (served from a different origin,
+// e.g. a static file server on a different port) can call this API directly.
+// DEMO SIMPLIFICATION: AllowAnyOrigin is fine for local development against a UI
+// you control, but a real production deployment should list specific allowed
+// origins explicitly rather than accepting requests from anywhere.
+// -------------------------------------------------------------------------------------
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
+
+// -------------------------------------------------------------------------------------
 // Monitoring — Application Insights. Connection string comes from config
 // (APPLICATIONINSIGHTS_CONNECTION_STRING, set as an App Service setting by Bicep in
 // production). In Development with no connection string configured, this becomes a
@@ -126,6 +139,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -176,6 +190,50 @@ app.MapGet("/api/applications/{id:guid}", async (Guid id, OriginationDbContext d
 {
     var application = await db.Applications.FindAsync(id);
     return application is not null ? Results.Ok(application) : Results.NotFound();
+}).RequireAuthorization();
+
+// -------------------------------------------------------------------------------------
+// Automated decisioning — the step between "submit" and "approve" that actually
+// evaluates the application. Deliberately simple rules for this reference project
+// (real underwriting would weigh credit score, income, debt-to-income, collateral
+// value, etc.) — but structurally this is where that logic lives: separate from the
+// human finalize step, so a UI can show a suggestion and let a reviewer accept or
+// override it before anything is committed or published.
+// -------------------------------------------------------------------------------------
+app.MapPost("/api/applications/{id:guid}/decision", async (Guid id, OriginationDbContext db) =>
+{
+    var application = await db.Applications.FindAsync(id);
+    if (application is null) return Results.NotFound();
+
+    const decimal maxEligibleAmount = 75_000m;
+    var isEligible = application.RequestedAmount > 0 && application.RequestedAmount <= maxEligibleAmount;
+
+    application.IsEligible = isEligible;
+    application.Status = ApplicationStatus.UnderReview;
+
+    if (isEligible)
+    {
+        application.SuggestedAmount = application.RequestedAmount;
+        // Simple tiered rate — illustrative, not a real risk model.
+        application.SuggestedRate = application.RequestedAmount switch
+        {
+            <= 15_000m => 5.99m,
+            <= 35_000m => 6.49m,
+            _ => 7.25m,
+        };
+        application.DecisionReason = "Eligible under automated review — within standard lending limits.";
+    }
+    else
+    {
+        application.SuggestedAmount = null;
+        application.SuggestedRate = null;
+        application.DecisionReason = application.RequestedAmount > maxEligibleAmount
+            ? $"Requested amount exceeds automated approval limit of {maxEligibleAmount:C0}. Refer to manual underwriting."
+            : "Requested amount must be greater than zero.";
+    }
+
+    await db.SaveChangesAsync();
+    return Results.Ok(application);
 }).RequireAuthorization();
 
 // This is the key integration point: approving a loan publishes an event that

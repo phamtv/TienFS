@@ -118,53 +118,85 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 }
 
 // -------------------------------------------------------------------------------------
-// Azure SQL — one logical server, one database per service (each service still owns
-// its own database exclusively; sharing the server is just cost/footprint efficiency
-// for this sample, not a sharing of data). Basic tier — cheap, fine for a demo;
-// production would likely want at least Standard (S0) for real concurrent workloads.
+// Azure SQL — THREE fully independent logical servers, one per microservice. Unlike
+// an earlier version of this template that shared one server across all three
+// databases, this gives each service a genuinely separate failure domain: if
+// Origination's database instance has an outage or gets throttled, Funding and
+// Servicing are completely unaffected. Costs more than a shared server, and is more
+// resources to manage — the trade-off is made deliberately here to match "true
+// microservice isolation" rather than optimizing for the smallest footprint.
+// Basic tier — cheap, fine for a demo; production would likely want at least
+// Standard (S0) for real concurrent workloads.
 // -------------------------------------------------------------------------------------
-resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
-  name: '${baseName}-sql-${uniqueString(resourceGroup().id)}'
+resource originationSqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
+  name: '${baseName}-sql-origination-${uniqueString(resourceGroup().id)}'
   location: location
   properties: {
     administratorLogin: sqlAdminLogin
     administratorLoginPassword: sqlAdminPassword
     minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Enabled' // App Services here aren't VNet-integrated; see note below
+    publicNetworkAccess: 'Enabled' // App Services here aren't VNet-integrated; see Key Vault note above
   }
 }
 
-// Allows Azure services (including these App Services) to reach the SQL server.
-// This is a broad rule (0.0.0.0 special-cased by Azure to mean "Azure services only",
-// not literally the whole internet) — tighter production setups would use Private
-// Link / VNet integration instead of this firewall-rule approach.
-resource sqlAllowAzureServices 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
-  parent: sqlServer
+resource originationSqlFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
+  parent: originationSqlServer
   name: 'AllowAzureServices'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
-  }
+  properties: { startIpAddress: '0.0.0.0', endIpAddress: '0.0.0.0' }
 }
 
 resource originationDb 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
-  parent: sqlServer
+  parent: originationSqlServer
   name: '${baseName}-origination-db'
   location: location
   sku: { name: 'Basic', tier: 'Basic' }
   properties: { maxSizeBytes: 2147483648 } // 2GB — Basic tier's cap
 }
 
+resource fundingSqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
+  name: '${baseName}-sql-funding-${uniqueString(resourceGroup().id)}'
+  location: location
+  properties: {
+    administratorLogin: sqlAdminLogin
+    administratorLoginPassword: sqlAdminPassword
+    minimalTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource fundingSqlFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
+  parent: fundingSqlServer
+  name: 'AllowAzureServices'
+  properties: { startIpAddress: '0.0.0.0', endIpAddress: '0.0.0.0' }
+}
+
 resource fundingDb 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
-  parent: sqlServer
+  parent: fundingSqlServer
   name: '${baseName}-funding-db'
   location: location
   sku: { name: 'Basic', tier: 'Basic' }
   properties: { maxSizeBytes: 2147483648 }
 }
 
+resource servicingSqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
+  name: '${baseName}-sql-servicing-${uniqueString(resourceGroup().id)}'
+  location: location
+  properties: {
+    administratorLogin: sqlAdminLogin
+    administratorLoginPassword: sqlAdminPassword
+    minimalTlsVersion: '1.2'
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource servicingSqlFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = {
+  parent: servicingSqlServer
+  name: 'AllowAzureServices'
+  properties: { startIpAddress: '0.0.0.0', endIpAddress: '0.0.0.0' }
+}
+
 resource servicingDb 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
-  parent: sqlServer
+  parent: servicingSqlServer
   name: '${baseName}-servicing-db'
   location: location
   sku: { name: 'Basic', tier: 'Basic' }
@@ -365,11 +397,11 @@ resource servicingServiceBusAccess 'Microsoft.Authorization/roleAssignments@2022
 // template itself (per-service SQL connection strings built from this deployment's
 // own outputs, but assembled and pushed as a deliberate separate step):
 //   ServiceBus--ConnectionString      (shared — same value for all three services)
-//   Sql-Origination-ConnectionString
-//   Sql-Funding-ConnectionString
-//   Sql-Servicing-ConnectionString
+//   Sql-Origination-ConnectionString  (uses originationSqlServerFqdn below)
+//   Sql-Funding-ConnectionString      (uses fundingSqlServerFqdn below)
+//   Sql-Servicing-ConnectionString    (uses servicingSqlServerFqdn below)
 // Each SQL connection string follows the pattern:
-//   Server=tcp:<sqlServer output>.database.windows.net,1433;Database=<db name>;
+//   Server=tcp:<that service's SQL server FQDN output>,1433;Database=<db name>;
 //   User ID=<sqlAdminLogin>;Password=<sqlAdminPassword>;Encrypt=true;
 // -------------------------------------------------------------------------------------
 
@@ -378,5 +410,7 @@ output fundingUrl string = 'https://${fundingApp.properties.defaultHostName}'
 output servicingUrl string = 'https://${servicingApp.properties.defaultHostName}'
 output keyVaultUri string = keyVault.properties.vaultUri
 output serviceBusNamespace string = serviceBusNamespace.name
-output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
+output originationSqlServerFqdn string = originationSqlServer.properties.fullyQualifiedDomainName
+output fundingSqlServerFqdn string = fundingSqlServer.properties.fullyQualifiedDomainName
+output servicingSqlServerFqdn string = servicingSqlServer.properties.fullyQualifiedDomainName
 output appInsightsConnectionString string = appInsights.properties.ConnectionString

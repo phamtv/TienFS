@@ -37,6 +37,12 @@ builder.Services.AddHostedService<LoanFundedSubscriber>();
 // Auth — validates tokens issued by Origination's /api/auth/token (same shared key).
 builder.Services.AddSharedJwtAuth(builder.Configuration);
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+});
+
 // Monitoring — Application Insights, same graceful-fallback pattern as elsewhere.
 builder.Services.AddApplicationInsightsTelemetry(new ApplicationInsightsServiceOptions
 {
@@ -85,6 +91,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
