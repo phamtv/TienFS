@@ -8,15 +8,15 @@
           {
             "Name": "loan-events",
             "Properties": {
-              "DefaultMessageTimeToLive": "P14D",
-              "DuplicateDetectionHistoryTimeWindow": "PT10M",
+              "DefaultMessageTimeToLive": "PT1H",
+              "DuplicateDetectionHistoryTimeWindow": "PT5M",
               "RequiresDuplicateDetection": false
             },
             "Subscriptions": [
               {
                 "Name": "funding-loan-approved",
                 "Properties": {
-                  "DefaultMessageTimeToLive": "P14D",
+                  "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT30S",
                   "MaxDeliveryCount": 5,
                   "DeadLetteringOnMessageExpiration": true
@@ -34,7 +34,7 @@
               {
                 "Name": "servicing-loan-funded",
                 "Properties": {
-                  "DefaultMessageTimeToLive": "P14D",
+                  "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT30S",
                   "MaxDeliveryCount": 5,
                   "DeadLetteringOnMessageExpiration": true

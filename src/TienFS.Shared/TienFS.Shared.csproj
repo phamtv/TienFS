@@ -9,6 +9,15 @@
   <ItemGroup>
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.18.2" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+  </ItemGroup>
+
+  <!-- Needed because this is a plain class library (Microsoft.NET.Sdk), not a Web SDK
+       project — Microsoft.AspNetCore.Authentication.JwtBearer assumes the ASP.NET Core
+       shared framework is available, which Web SDK projects get automatically but a
+       class library must reference explicitly. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>

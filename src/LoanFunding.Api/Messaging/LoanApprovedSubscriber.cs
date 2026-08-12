@@ -42,7 +42,7 @@ public class LoanApprovedSubscriber : BackgroundService
         _connectionString = configuration["ServiceBus:ConnectionString"];
     }
 
-    public override async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (string.IsNullOrWhiteSpace(_connectionString))
         {
@@ -62,9 +62,21 @@ public class LoanApprovedSubscriber : BackgroundService
         _processor.ProcessMessageAsync += HandleMessageAsync;
         _processor.ProcessErrorAsync += HandleErrorAsync;
 
-        await _processor.StartProcessingAsync(cancellationToken);
+        await _processor.StartProcessingAsync(stoppingToken);
         _logger.LogInformation("LoanApprovedSubscriber started, listening on {Topic}/{Subscription}",
             TopicName, SubscriptionName);
+
+        // ServiceBusProcessor runs its own background threads once started, so this
+        // task just needs to stay alive until the host asks it to stop — that's what
+        // BackgroundService's contract expects from ExecuteAsync.
+        try
+        {
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on shutdown — StopAsync below handles actual cleanup
+        }
     }
 
     private async Task HandleMessageAsync(ProcessMessageEventArgs args)

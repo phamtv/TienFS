@@ -3,3 +3,6 @@ obj/
 *.user
 .vs/
 appsettings.Local.json
+*.db
+*.db-shm
+*.db-wal

@@ -35,7 +35,7 @@ public class LoanFundedSubscriber : BackgroundService
         _connectionString = configuration["ServiceBus:ConnectionString"];
     }
 
-    public override async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (string.IsNullOrWhiteSpace(_connectionString))
         {
@@ -54,9 +54,18 @@ public class LoanFundedSubscriber : BackgroundService
         _processor.ProcessMessageAsync += HandleMessageAsync;
         _processor.ProcessErrorAsync += HandleErrorAsync;
 
-        await _processor.StartProcessingAsync(cancellationToken);
+        await _processor.StartProcessingAsync(stoppingToken);
         _logger.LogInformation("LoanFundedSubscriber started, listening on {Topic}/{Subscription}",
             TopicName, SubscriptionName);
+
+        try
+        {
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on shutdown — StopAsync below handles actual cleanup
+        }
     }
 
     private async Task HandleMessageAsync(ProcessMessageEventArgs args)
